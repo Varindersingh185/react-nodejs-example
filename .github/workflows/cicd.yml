@@ -34,7 +34,7 @@ jobs:
       - name: Push image to ECR
         run: |
           docker tag myimage:latest \
-        ${{ steps.ecr.outputs.registry }}/test-varinder:latest
+            ${{ steps.ecr.outputs.registry }}/test-varinder:latest
 
           docker push \
-        ${{ steps.ecr.outputs.registry }}/test-varinder:latest
+            ${{ steps.ecr.outputs.registry }}/test-varinder:latest
