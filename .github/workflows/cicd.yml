@@ -38,3 +38,16 @@ jobs:
 
           docker push \
             ${{ steps.ecr.outputs.registry }}/test-varinder:latest
+      - name: Deploy to EC2
+        run: |
+          aws ssm send-command \
+            --instance-ids "i-0d7f8728e9aaee515" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin 010928211341.dkr.ecr.ap-south-1.amazonaws.com",
+              "sudo docker pull 010928211341.dkr.ecr.ap-south-1.amazonaws.com/test:latest",
+              "sudo docker stop test-app || true",
+              "sudo docker rm test-app || true",
+              "sudo docker run -d --name test-app -p 80:80 010928211341.dkr.ecr.ap-south-1.amazonaws.com/test:latest"
+            ]' \
+            --region ap-south-1
