@@ -13,7 +13,7 @@ export const Header = () => {
 
     return(
         <div style={headerStyle}>
-            <h1>React With Sudo Varinder Saah ji ka saja hand</h1>
+            <h1>React With Sudo </h1>
         </div>
     )
 }
