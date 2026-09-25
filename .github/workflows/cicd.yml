@@ -45,16 +45,22 @@ jobs:
             ${{ steps.ecr.outputs.registry }}/test-varinder:latest
 
       # 6. Deploy latest image to EC2
-      - name: Deploy to EC2
-        run: |
-          aws ssm send-command \
-            --instance-ids "${{ secrets.EC2_INSTANCE_ID }}" \
-            --document-name "AWS-RunShellScript" \
-            --parameters 'commands=[
-              "aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin '${{ secrets.AWS_ACCOUNT_ID }}'.dkr.ecr.ap-south-1.amazonaws.com",
-              "sudo docker pull '${{ secrets.AWS_ACCOUNT_ID }}'.dkr.ecr.ap-south-1.amazonaws.com/test-varinder:latest",
-              "sudo docker stop myapp || true",
-              "sudo docker rm myapp || true",
-              "sudo docker run -d --name myapp -p 8080:80 '${{ secrets.AWS_ACCOUNT_ID }}'.dkr.ecr.ap-south-1.amazonaws.com/test-varinder:latest"
-            ]' \
-            --region ap-south-1
+    - name: Deploy to EC2
+  env:
+    AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+    EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+  run: |
+    ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com"
+    IMAGE="${ECR_REGISTRY}/test-varinder:latest"
+
+    aws ssm send-command \
+      --instance-ids "$EC2_INSTANCE_ID" \
+      --document-name "AWS-RunShellScript" \
+      --parameters "commands=[
+        \"aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin ${ECR_REGISTRY}\",
+        \"sudo docker pull ${IMAGE}\",
+        \"sudo docker stop myapp || true\",
+        \"sudo docker rm myapp || true\",
+        \"sudo docker run -d --name myapp -p 8080:80 ${IMAGE}\"
+      ]" \
+      --region ap-south-1
