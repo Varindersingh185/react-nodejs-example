@@ -48,14 +48,20 @@ jobs:
           ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com"
           IMAGE="${ECR_REGISTRY}/test-varinder:latest"
 
+          cat > ssm-commands.json <<EOF
+          {
+            "commands": [
+              "aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin ${ECR_REGISTRY}",
+              "sudo docker pull ${IMAGE}",
+              "sudo docker stop myapp || true",
+              "sudo docker rm myapp || true",
+              "sudo docker run -d --name myapp -p 8080:80 ${IMAGE}"
+            ]
+          }
+          EOF
+
           aws ssm send-command \
             --instance-ids "$EC2_INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --parameters "commands=[
-              \"aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin ${ECR_REGISTRY}\",
-              \"sudo docker pull ${IMAGE}\",
-              \"sudo docker stop myapp || true\",
-              \"sudo docker rm myapp || true\",
-              \"sudo docker run -d --name myapp -p 8080:80 ${IMAGE}\"
-            ]" \
-            --region ap-south-10:80 ${IMAGE}\"
+            --parameters file://ssm-commands.json \
+            --region ap-south-1
