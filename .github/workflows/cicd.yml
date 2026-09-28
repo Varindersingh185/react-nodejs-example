@@ -64,4 +64,4 @@ jobs:
             --instance-ids "$EC2_INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --parameters file://ssm-commands.json \
-            --region ap-south-1
+          --region ap-south-1
