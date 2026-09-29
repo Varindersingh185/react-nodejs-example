@@ -40,22 +40,83 @@ jobs:
           docker push \
             ${{ steps.ecr.outputs.registry }}/test-varinder:latest
 
-      - name: Deploy to EC2
+      - name: Blue-Green Deploy to EC2
         env:
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
           EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+
         run: |
+
           ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com"
           IMAGE="${ECR_REGISTRY}/test-varinder:latest"
 
           cat > ssm-commands.json <<EOF
           {
             "commands": [
+              "set -e",
+
+              "echo '===== BLUE-GREEN DEPLOYMENT STARTED ====='",
+
+              "echo 'Logging into ECR...'",
               "aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin ${ECR_REGISTRY}",
+
+              "echo 'Pulling latest image...'",
               "sudo docker pull ${IMAGE}",
-              "sudo docker stop myapp || true",
-              "sudo docker rm myapp || true",
-              "sudo docker run -d --name myapp -p 8080:80 ${IMAGE}"
+
+              "echo 'Checking active container...'",
+
+              "if sudo docker ps --format '{{.Names}}' | grep -q '^myapp-blue$'; then",
+              "  OLD_COLOR=blue",
+              "  NEW_COLOR=green",
+              "  OLD_PORT=8081",
+              "  NEW_PORT=8082",
+              "else",
+              "  OLD_COLOR=green",
+              "  NEW_COLOR=blue",
+              "  OLD_PORT=8082",
+              "  NEW_PORT=8081",
+              "fi",
+
+              "echo Old container: myapp-\${OLD_COLOR}",
+              "echo New container: myapp-\${NEW_COLOR}",
+
+              "echo 'Removing any stale new container...'",
+              "sudo docker rm -f myapp-\${NEW_COLOR} 2>/dev/null || true",
+
+              "echo 'Starting new container...'",
+              "sudo docker run -d --name myapp-\${NEW_COLOR} -p \${NEW_PORT}:80 ${IMAGE}",
+
+              "echo 'Waiting for application...'",
+              "sleep 10",
+
+              "echo 'Running health check...'",
+              "curl -f http://localhost:\${NEW_PORT} || exit 1",
+
+              "echo 'New container is healthy!'",
+
+              "echo 'Switching Nginx traffic...'",
+
+              "sudo sed -i \"s#proxy_pass http://127.0.0.1:[0-9]*;#proxy_pass http://127.0.0.1:\${NEW_PORT};#\" /etc/nginx/sites-available/myapp",
+
+              "echo 'Testing Nginx configuration...'",
+              "sudo nginx -t",
+
+              "echo 'Reloading Nginx...'",
+              "sudo systemctl reload nginx",
+
+              "echo 'Traffic switched successfully!'",
+
+              "sleep 3",
+
+              "echo 'Testing application through Nginx...'",
+              "curl -f http://localhost || exit 1",
+
+              "echo 'Removing old container...'",
+              "sudo docker rm -f myapp-\${OLD_COLOR} 2>/dev/null || true",
+
+              "echo '===== BLUE-GREEN DEPLOYMENT COMPLETED ====='",
+
+              "sudo docker ps"
             ]
           }
           EOF
@@ -64,4 +125,5 @@ jobs:
             --instance-ids "$EC2_INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --parameters file://ssm-commands.json \
+            --region ap-south-1
           --region ap-south-1
